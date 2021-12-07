@@ -32,7 +32,7 @@ p.add_argument('--steps_til_summary', type=int, default=100,
 p.add_argument('--model_type', type=str, default='sine',
                help='Options are "sine" (all sine activations) and "mixed" (first layer sine, other layers tanh)')
 p.add_argument('--point_cloud_path', type=str, default='/home/sitzmann/data/point_cloud.xyz',
-               help='Options are "sine" (all sine activations) and "mixed" (first layer sine, other layers tanh)')
+               help='Path to the point cloud file')
 
 p.add_argument('--checkpoint_path', default=None, help='Checkpoint to trained model.')
 opt = p.parse_args()
