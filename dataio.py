@@ -15,6 +15,8 @@ import torch
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision.transforms import Resize, Compose, ToTensor, Normalize
+from hdf5_to_dict import load_tracer
+from scipy.spatial import cKDTree
 
 
 def get_mgrid(sidelen, dim=2):
@@ -39,6 +41,33 @@ def get_mgrid(sidelen, dim=2):
     pixel_coords = torch.Tensor(pixel_coords).view(-1, dim)
     return pixel_coords
 
+def resample(pos,attr,grid,h):
+    kernel = lambda p: 0 if p > 3 else 1/(math.pow(math.pi, 3/2) * math.pow(h,3)) * math.pow(math.e, -p**2)
+    kd = cKDTree(pos,leafsize=100)
+
+    # x = np.linspace(min(data[:,0]), max(data[:,0]),nx)
+    # y = np.linspace(min(data[:,1]), max(data[:,1]),ny)
+    # z = np.linspace(min(data[:,2]), max(data[:,2]),nz)
+    # zz,yy,xx = np.meshgrid(z,y,x,indexing='ij')
+    # grid = np.stack((xx.flatten(),yy.flatten(),zz.flatten()),axis=1)
+    if len(attr.shape) == 1:
+        n_dim = 4
+    else:
+        n_dim = pos.shape[1]+attr.shape[1]
+    new_data = np.zeros((len(grid),n_dim))
+    new_data[:,:3] = grid
+    neighbor = kd.query_ball_point(grid, h,workers=8)
+    for j,nn in enumerate(neighbor):
+        print("%d/%d"%(j,len(new_data)),end='\r')
+        if len(nn) > 0:
+            nn_data = attr[nn]
+            nn_pos = pos[nn]
+            r = np.sum((nn_pos - grid[j]) ** 2,axis=1) ** 0.5
+            p = r/h
+            averaged = np.average(nn_data,axis=0,weights=list(map(kernel,p)))
+            new_data[j,3:] = averaged
+    new_data = torch.Tensor(new_data).view(1,len(grid),-1)
+    return new_data
 
 def lin2img(tensor, image_resolution=None):
     batch_size, num_samples, channels = tensor.shape
@@ -441,6 +470,72 @@ class PointCloud(Dataset):
         return {'coords': torch.from_numpy(coords).float()}, {'sdf': torch.from_numpy(sdf).float(),
                                                               'normals': torch.from_numpy(normals).float()}
 
+class Tracer(Dataset):
+    def __init__(self, path_to_tracer, batch_size, keep_asepct_ratio=False) -> None:
+        super().__init__()
+        tracer_data = load_tracer(path_to_tracer)
+        coords = tracer_data[2]['Xcart']
+        coords -= np.mean(coords, axis=0, keepdims=True)
+        if keep_asepct_ratio:
+            coord_max = np.amax(coords)
+            coord_min = np.amin(coords)
+        else:
+            coord_max = np.amax(coords, axis=0, keepdims=True)
+            coord_min = np.amin(coords, axis=0, keepdims=True)
+
+        self.coords = (coords - coord_min) / (coord_max - coord_min)
+        self.coords -= 0.5
+        self.coords *= 2.
+
+        attr = tracer_data[2]['Ye']
+        attr_max = np.max(attr)
+        attr_min = np.min(attr)
+        self.attr = (attr - attr_min) / (attr_max - attr_min)
+        # self.attr -= 0.5
+        # self.attr *= 2.
+
+        # from matplotlib import pyplot as plt
+        # print(self.attr.min(),self.attr.max())
+        # plt.hist(self.attr)
+        # plt.show()
+        # exit()
+
+        self.batch_size = batch_size
+
+
+    def __len__(self):
+        return self.coords.shape[0] // self.batch_size
+
+    def __getitem__(self, index):
+        point_cloud_size = self.coords.shape[0]
+
+        # Random coords
+        rand_idcs = np.random.choice(point_cloud_size, size=self.batch_size)
+
+        coords = self.coords[rand_idcs]
+        attr = self.attr[rand_idcs]
+        #for debugging
+        # print()
+        # print(attr.min(),attr.max(),rand_idcs)
+        # scatter_3d(np.concatenate([coords,attr[:,None]],axis=1))
+        # exit()
+        return {'coords': torch.from_numpy(coords).float()}, {'attr': torch.from_numpy(attr).float()}
+
+def scatter_3d(array,vmin=None,vmax=None,threshold = -1e10,center=None,save=False,fname=None):
+    from matplotlib import pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    # array = array[array[:,3] > threshold]
+    ax.scatter(array[:,0],array[:,1],array[:,2],c=array[:,3],marker='.',vmin=vmin,vmax=vmax)
+    if center is not None:
+        ax.scatter(center[0],center[1],center[2],c="red",marker='o')
+    # ax2 = fig.add_subplot(122,projection='3d',sharex=ax,sharey=ax,sharez=ax)
+    # ax2.scatter(array2[:,0],array2[:,1],array2[:,2],c=array2[:,3],marker='^',vmin=-1,vmax=1)
+    if save:
+        plt.savefig(fname)
+    else:
+        plt.show()
 
 class Video(Dataset):
     def __init__(self, path_to_video):
@@ -887,3 +982,10 @@ class CompositeGradients(Dataset):
                    'gradients': self.comp_grads}
 
         return in_dict, gt_dict
+
+if __name__ == '__main__':
+    try:
+        data_path = os.environ['data']
+    except KeyError:
+        data_path = './data/'
+    Tracer(os.path.join(data_path,'tracer/torus_gw170817_traces_pruned_r250/tracers_00000050.h5part'))

@@ -283,6 +283,53 @@ def write_sdf_summary(model, model_input, gt, model_output, writer, total_steps,
         min_max_summary(prefix + 'model_out_min_max', model_output['model_out'], writer, total_steps)
         min_max_summary(prefix + 'coords', model_input['coords'], writer, total_steps)
 
+def write_particle_summary(model,model_input, gt, model_output, writer,total_steps, prefix='train_', gt_img=None):
+    if gt_img is not None:
+        writer.add_image('gt_yz_img', gt_img['yz'][0], global_step=0)
+        writer.add_image('gt_xz_img', gt_img['xz'][0], global_step=0)
+        writer.add_image('gt_xy_img', gt_img['xy'][0], global_step=0)
+
+    slice_coords_2d = dataio.get_mgrid(32)
+    with torch.no_grad():
+        yz_slice_coords = torch.cat((torch.zeros_like(slice_coords_2d[:, :1]), slice_coords_2d), dim=-1)
+        yz_slice_model_input = {'coords': yz_slice_coords.cuda()[None, ...]}
+
+        yz_model_out = model(yz_slice_model_input)
+        attr = yz_model_out['model_out']
+        attr = dataio.lin2img(attr).squeeze().cpu().numpy()
+        # fig = make_contour_plot(attr,mode='lin')
+        # writer.add_figure(prefix + 'yz_particle_slice', fig, global_step=total_steps)
+        writer.add_image(prefix + 'yz_particle_slice', attr[None, ...], global_step=total_steps)
+
+        xz_slice_coords = torch.cat((slice_coords_2d[:,:1],
+                                     torch.zeros_like(slice_coords_2d[:, :1]),
+                                     slice_coords_2d[:,-1:]), dim=-1)
+        xz_slice_model_input = {'coords': xz_slice_coords.cuda()[None, ...]}
+
+        xz_model_out = model(xz_slice_model_input)
+        attr = xz_model_out['model_out']
+        attr = dataio.lin2img(attr).squeeze().cpu().numpy()
+
+        # fig = make_contour_plot(attr,mode='lin')
+        # writer.add_figure(prefix + 'xz_sdf_slice', fig, global_step=total_steps)
+        writer.add_image(prefix + 'xz_particle_slice', attr[None, ...], global_step=total_steps)
+
+        xy_slice_coords = torch.cat((slice_coords_2d[:,:2],
+                                     0.25*torch.ones_like(slice_coords_2d[:, :1])), dim=-1)
+        xy_slice_model_input = {'coords': xy_slice_coords.cuda()[None, ...]}
+
+        xy_model_out = model(xy_slice_model_input)
+        attr = xy_model_out['model_out']
+        attr = dataio.lin2img(attr).squeeze().cpu().numpy()
+        
+        # fig = make_contour_plot(attr,mode='lin')
+        # writer.add_figure(prefix + 'xy_sdf_slice', fig, global_step=total_steps)
+        writer.add_image(prefix + 'xy_particle_slice', attr[None, ...], global_step=total_steps)
+
+        min_max_summary(prefix + 'model_out_min_max', model_output['model_out'], writer, total_steps)
+        min_max_summary(prefix + 'coords', model_input['coords'], writer, total_steps)
+        
+
 
 def hypernet_activation_summary(model, model_input, gt, model_output, writer, total_steps, prefix='train_'):
     with torch.no_grad():
