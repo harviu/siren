@@ -28,7 +28,7 @@ p.add_argument('--experiment_name', type=str, required=True,
 
 # General training options
 p.add_argument('--batch_size', type=int, default=1400)
-p.add_argument('--lr', type=float, default=1e-7, help='learning rate. default=1e-4')
+p.add_argument('--lr', type=float, default=1e-4, help='learning rate. default=1e-4')
 p.add_argument('--num_epochs', type=int, default=10000,
                help='Number of epochs to train for.')
 
@@ -65,27 +65,27 @@ root_path = os.path.join(opt.logging_root, opt.experiment_name)
 summaries_dir = os.path.join(root_path, 'summaries')
 utils.cond_mkdir(summaries_dir)
 
-slice_coords_2d = dataio.get_mgrid(32)
+slice_coords_2d = dataio.get_mgrid(128)
 gt_img = {}
 
 yz_slice_coords = torch.cat((torch.zeros_like(slice_coords_2d[:, :1]), slice_coords_2d), dim=-1)
-yz_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,yz_slice_coords.numpy(),0.088)
-yz_slice_gt = yz_slice_gt
+yz_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,yz_slice_coords.numpy(),0.02)
+yz_slice_gt = (yz_slice_gt +1) /2
 gt_img['yz'] = dataio.lin2img(yz_slice_gt[:,:,-1:])
 
 xz_slice_coords = torch.cat((slice_coords_2d[:,:1],
                                 torch.zeros_like(slice_coords_2d[:, :1]),
                                 slice_coords_2d[:,-1:]), dim=-1)
-xz_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,xz_slice_coords.numpy(),0.088)
-xz_slice_gt = xz_slice_gt
+xz_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,xz_slice_coords.numpy(),0.02)
+xz_slice_gt = (xz_slice_gt +1) /2
 gt_img['xz'] = dataio.lin2img(xz_slice_gt[:,:,-1:])
 
 xy_slice_coords = torch.cat((slice_coords_2d[:,:2],0.25*torch.ones_like(slice_coords_2d[:, :1])), dim=-1)
-xy_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,xy_slice_coords.numpy(),0.088)
-xy_slice_gt = xy_slice_gt
+xy_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,xy_slice_coords.numpy(),0.02)
+xy_slice_gt = (xy_slice_gt +1) /2
 gt_img['xy']  = dataio.lin2img(xy_slice_gt[:,:,-1:])
 
-summary_fn = partial(utils.write_particle_summary,gt_img = gt_img)
+summary_fn = partial(utils.write_particle_summary, gt_img = gt_img)
 
 training.train(model=model, train_dataloader=dataloader, epochs=opt.num_epochs, lr=opt.lr,
                steps_til_summary=opt.steps_til_summary, epochs_til_checkpoint=opt.epochs_til_ckpt,

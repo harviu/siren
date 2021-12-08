@@ -471,7 +471,7 @@ class PointCloud(Dataset):
                                                               'normals': torch.from_numpy(normals).float()}
 
 class Tracer(Dataset):
-    def __init__(self, path_to_tracer, batch_size, keep_asepct_ratio=False) -> None:
+    def __init__(self, path_to_tracer, batch_size, keep_asepct_ratio=True) -> None:
         super().__init__()
         tracer_data = load_tracer(path_to_tracer)
         coords = tracer_data[2]['Xcart']
@@ -491,14 +491,9 @@ class Tracer(Dataset):
         attr_max = np.max(attr)
         attr_min = np.min(attr)
         self.attr = (attr - attr_min) / (attr_max - attr_min)
-        # self.attr -= 0.5
-        # self.attr *= 2.
-
-        # from matplotlib import pyplot as plt
-        # print(self.attr.min(),self.attr.max())
-        # plt.hist(self.attr)
-        # plt.show()
-        # exit()
+        self.attr = self.attr[:,None]
+        self.attr -= 0.5
+        self.attr *= 2.
 
         self.batch_size = batch_size
 
@@ -514,11 +509,6 @@ class Tracer(Dataset):
 
         coords = self.coords[rand_idcs]
         attr = self.attr[rand_idcs]
-        #for debugging
-        # print()
-        # print(attr.min(),attr.max(),rand_idcs)
-        # scatter_3d(np.concatenate([coords,attr[:,None]],axis=1))
-        # exit()
         return {'coords': torch.from_numpy(coords).float()}, {'attr': torch.from_numpy(attr).float()}
 
 def scatter_3d(array,vmin=None,vmax=None,threshold = -1e10,center=None,save=False,fname=None):

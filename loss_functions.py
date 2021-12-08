@@ -240,5 +240,5 @@ def sdf(model_output, gt):
 # inter = 3e3 for ReLU-PE
 
 def particle(model_output, gt):
-    # return {'particle_loss': ((model_output['model_out'] - gt['attr']) ** 2).mean()}
-    return {'particle_loss': torch.abs(model_output['model_out'] - gt['attr']).mean()}
+    loss = (model_output['model_out'] - gt['attr']) ** 2
+    return {'particle_loss': loss.mean()}
