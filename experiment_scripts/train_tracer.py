@@ -69,19 +69,19 @@ slice_coords_2d = dataio.get_mgrid(128)
 gt_img = {}
 
 yz_slice_coords = torch.cat((torch.zeros_like(slice_coords_2d[:, :1]), slice_coords_2d), dim=-1)
-yz_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,yz_slice_coords.numpy(),0.02)
+yz_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,yz_slice_coords.numpy(),0.04)
 yz_slice_gt = (yz_slice_gt +1) /2
 gt_img['yz'] = dataio.lin2img(yz_slice_gt[:,:,-1:])
 
 xz_slice_coords = torch.cat((slice_coords_2d[:,:1],
                                 torch.zeros_like(slice_coords_2d[:, :1]),
                                 slice_coords_2d[:,-1:]), dim=-1)
-xz_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,xz_slice_coords.numpy(),0.02)
+xz_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,xz_slice_coords.numpy(),0.04)
 xz_slice_gt = (xz_slice_gt +1) /2
 gt_img['xz'] = dataio.lin2img(xz_slice_gt[:,:,-1:])
 
 xy_slice_coords = torch.cat((slice_coords_2d[:,:2],0.25*torch.ones_like(slice_coords_2d[:, :1])), dim=-1)
-xy_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,xy_slice_coords.numpy(),0.02)
+xy_slice_gt = dataio.resample(tracer_dataset.coords,tracer_dataset.attr,xy_slice_coords.numpy(),0.04)
 xy_slice_gt = (xy_slice_gt +1) /2
 gt_img['xy']  = dataio.lin2img(xy_slice_gt[:,:,-1:])
 

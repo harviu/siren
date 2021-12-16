@@ -2,6 +2,7 @@ import csv
 import glob
 import math
 import os
+import time
 
 import matplotlib.colors as colors
 import numpy as np
@@ -17,6 +18,9 @@ from torch.utils.data import Dataset
 from torchvision.transforms import Resize, Compose, ToTensor, Normalize
 from hdf5_to_dict import load_tracer
 from scipy.spatial import cKDTree
+
+from vtkmodules.util import numpy_support
+from vtkmodules import all as vtk
 
 
 def get_mgrid(sidelen, dim=2):
@@ -972,6 +976,112 @@ class CompositeGradients(Dataset):
                    'gradients': self.comp_grads}
 
         return in_dict, gt_dict
+
+
+def write_vts(data,nx,ny,nz,array_dict,filename,keep_aspect=False):
+    vol = vtk.vtkStructuredPoints()
+    vol.SetDimensions(nx,ny,nz)
+    if not keep_aspect:
+        vol.SetOrigin(*list(data[:,:3].min(0)))
+        sx,sy,sz = data[:,:3].max(0) - data[:,:3].min(0)
+    else:
+        sx = sy = sz = data[:,:3].max() - data[:,:3].min()
+        coord_min = data[:,:3].min()
+        vol.SetOrigin(coord_min,coord_min,coord_min)
+    sx /= nx-1
+    sy /= ny-1
+    sz /= nz-1
+    vol.SetSpacing(sx,sy,sz)
+    for k, v in array_dict.items():
+        vtk_array = numpy_support.numpy_to_vtk(v)
+        vtk_array.SetName(k)
+        vol.GetPointData().AddArray(vtk_array)
+
+    writer = vtk.vtkXMLDataSetWriter()
+    writer.SetFileName(filename)
+    writer.SetInputData(vol)
+    writer.Write()
+
+def get_volume(decoder, N=128, max_batch=64 ** 3):
+    start = time.time()
+
+    decoder.eval()
+
+    # NOTE: the voxel_origin is actually the (bottom, left, down) corner, not the middle
+    voxel_origin = [-1, -1, -1]
+    voxel_size = 2.0 / (N - 1)
+
+    overall_index = torch.arange(0, N ** 3, 1, out=torch.LongTensor())
+    samples = torch.zeros(N ** 3, 4)
+
+    # transform first 3 columns
+    # to be the x, y, z index
+    samples[:, 2] = overall_index % N
+    samples[:, 1] = (overall_index.long() / N) % N
+    samples[:, 0] = ((overall_index.long() / N) / N) % N
+
+    # transform first 3 columns
+    # to be the x, y, z coordinate
+    samples[:, 0] = (samples[:, 0] * voxel_size) + voxel_origin[2]
+    samples[:, 1] = (samples[:, 1] * voxel_size) + voxel_origin[1]
+    samples[:, 2] = (samples[:, 2] * voxel_size) + voxel_origin[0]
+
+    num_samples = N ** 3
+
+    samples.requires_grad = False
+
+    head = 0
+
+    while head < num_samples:
+        print(head)
+        sample_subset = samples[head : min(head + max_batch, num_samples), 0:3].cuda()
+
+        samples[head : min(head + max_batch, num_samples), 3] = (
+            decoder(sample_subset)
+            .squeeze()#.squeeze(1)
+            .detach()
+            .cpu()
+        )
+        head += max_batch
+
+    voxel_values = samples[:, 3]
+    voxel_values = voxel_values.reshape(N, N, N)
+    
+    end = time.time()
+    print("sampling takes: %f" % (end - start))
+    return voxel_values
+
+def get_attr(decoder, coords, max_batch = 10000):
+    start = time.time()
+    coords = torch.from_numpy(coords)
+    num_samples = len(coords)
+    samples = torch.zeros(num_samples, 4)
+
+    samples[:,:3] =  coords
+
+    samples.requires_grad = False
+
+    head = 0
+
+    while head < num_samples:
+        print(head)
+        sample_subset = samples[head : min(head + max_batch, num_samples), 0:3].cuda()
+
+        samples[head : min(head + max_batch, num_samples), 3] = (
+            decoder(sample_subset)
+            .squeeze()#.squeeze(1)
+            .detach()
+            .cpu()
+        )
+        head += max_batch
+
+    attr = samples[:, 3]
+    
+    end = time.time()
+    print("sampling takes: %f" % (end - start))
+    return attr
+
+
 
 if __name__ == '__main__':
     try:
