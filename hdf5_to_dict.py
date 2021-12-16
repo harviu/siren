@@ -962,6 +962,11 @@ class Trace(TracerDataBase):
 def load_tracers(tracer_dir,
                    parallel=False,
                    ids=None):
+  '''
+  Parallel loading face memory issues
+  Serial version is slow because of large memory movement
+  This can be optimized by getting the number of total tracers and allocate the memory first
+  '''
   import numpy as np
   import h5py, gc
   files = get_tracer_fnams(tracer_dir)
@@ -1036,3 +1041,11 @@ def load_tracer(tracer_file,ids=None):
       out_data[k] = v[mask].copy()
 
   return out_hdr,out_units,out_data
+
+if __name__ == '__main__':
+  try:
+    data_path = os.environ['data']
+  except KeyError:
+    data_path = './data/'
+  data = load_tracer(os.path.join(data_path,'tracer/torus_gw170817_traces_pruned_r250/tracers_00000950.h5part'))
+  print(data)

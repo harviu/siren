@@ -16,11 +16,59 @@ import torch
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision.transforms import Resize, Compose, ToTensor, Normalize
-from hdf5_to_dict import load_tracer
+from hdf5_to_dict import load_tracer, get_tracer_fnams
+import h5py
 from scipy.spatial import cKDTree
 
 from vtkmodules.util import numpy_support
 from vtkmodules import all as vtk
+
+def get_tracer_num(tracer_file):
+    with h5py.File(tracer_file,'r') as f:
+        n = f['ntracers'][0]
+    return n
+
+def get_xcart_ye(tracer_file,keep_aspect_ratio = True):
+    with h5py.File(tracer_file,'r') as f:
+        if 'Step#0' in f.keys():
+            coords = f['Step#0/Xcart'][()]
+            ye = f['Step#0/Ye'][()]
+        else:
+            coords = f['Xcart'][()]
+            ye = f['Ye'][()]
+        time = f['Time'][0]
+        time = np.full((len(ye),1),fill_value=time,dtype=np.float32)
+    
+    coords -= np.mean(coords, axis=0, keepdims=True)
+    if keep_aspect_ratio:
+        coord_max = np.amax(coords)
+        coord_min = np.amin(coords)
+    else:
+        coord_max = np.amax(coords, axis=0, keepdims=True)
+        coord_min = np.amin(coords, axis=0, keepdims=True)
+
+    coords = (coords - coord_min) / (coord_max - coord_min)
+    coords -= 0.5
+    coords *= 2.
+    return np.concatenate([coords,time,ye[:,None]],axis=-1)
+
+def load_tracers(tracer_dir, keep_aspect_ratio = True):
+    files = get_tracer_fnams(tracer_dir)
+    if not files:
+        raise ValueError("This directory is empty!")
+    
+    total_tracer_num = 0
+    tracer_num = [0] * len(files)
+    for i,f in enumerate(files):
+        n = get_tracer_num(f)
+        total_tracer_num+=n
+        tracer_num[i] = n
+    data = np.zeros((total_tracer_num,5),dtype=np.float32)
+    n = 0
+    for i,f in enumerate(files):
+        data[n:n+tracer_num[i]] = get_xcart_ye(f)
+        n += tracer_num[i]
+    return tracer_num, data
 
 
 def get_mgrid(sidelen, dim=2):
@@ -475,12 +523,12 @@ class PointCloud(Dataset):
                                                               'normals': torch.from_numpy(normals).float()}
 
 class Tracer(Dataset):
-    def __init__(self, path_to_tracer, batch_size, keep_asepct_ratio=True) -> None:
+    def __init__(self, path_to_tracer, batch_size, keep_aspect_ratio=True) -> None:
         super().__init__()
         tracer_data = load_tracer(path_to_tracer)
         coords = tracer_data[2]['Xcart']
         coords -= np.mean(coords, axis=0, keepdims=True)
-        if keep_asepct_ratio:
+        if keep_aspect_ratio:
             coord_max = np.amax(coords)
             coord_min = np.amin(coords)
         else:
@@ -502,6 +550,36 @@ class Tracer(Dataset):
         self.batch_size = batch_size
 
 
+    def __len__(self):
+        return self.coords.shape[0] // self.batch_size
+
+    def __getitem__(self, index):
+        point_cloud_size = self.coords.shape[0]
+
+        # Random coords
+        rand_idcs = np.random.choice(point_cloud_size, size=self.batch_size)
+
+        coords = self.coords[rand_idcs]
+        attr = self.attr[rand_idcs]
+        return {'coords': torch.from_numpy(coords).float()}, {'attr': torch.from_numpy(attr).float()}
+
+class Tracers(Dataset):
+    def __init__(self, dir_to_tracers, batch_size, keep_aspect_ratio=True):
+        super().__init__()
+        time_mask, tracers = load_tracers(dir_to_tracers, keep_aspect_ratio)
+
+        tracers[:,3:]
+        temp_max = np.max(tracers[:,3:],0)
+        temp_min = np.min(tracers[:,3:],0)
+        tracers[:,3:] = (tracers[:,3:] - temp_min) / (temp_max - temp_min)
+        tracers[:,3:] -= 0.5
+        tracers[:,3:] *= 2.
+
+        self.coords = tracers[:,:4]
+        self.attr = tracers[:,4:]
+        self.time_mask = time_mask
+        self.batch_size = batch_size
+    
     def __len__(self):
         return self.coords.shape[0] // self.batch_size
 
@@ -1053,21 +1131,22 @@ def get_volume(decoder, N=128, max_batch=64 ** 3):
 
 def get_attr(decoder, coords, max_batch = 10000):
     start = time.time()
+    coord_dim = coords.shape[1]
     coords = torch.from_numpy(coords)
     num_samples = len(coords)
-    samples = torch.zeros(num_samples, 4)
+    samples = torch.zeros(num_samples, coord_dim+1)
 
-    samples[:,:3] =  coords
+    samples[:,:coord_dim] =  coords
 
     samples.requires_grad = False
 
     head = 0
 
     while head < num_samples:
-        print(head)
-        sample_subset = samples[head : min(head + max_batch, num_samples), 0:3].cuda()
+        # print(head)
+        sample_subset = samples[head : min(head + max_batch, num_samples), 0:coord_dim].cuda()
 
-        samples[head : min(head + max_batch, num_samples), 3] = (
+        samples[head : min(head + max_batch, num_samples), coord_dim] = (
             decoder(sample_subset)
             .squeeze()#.squeeze(1)
             .detach()
@@ -1075,7 +1154,7 @@ def get_attr(decoder, coords, max_batch = 10000):
         )
         head += max_batch
 
-    attr = samples[:, 3]
+    attr = samples[:, coord_dim]
     
     end = time.time()
     print("sampling takes: %f" % (end - start))
@@ -1088,4 +1167,6 @@ if __name__ == '__main__':
         data_path = os.environ['data']
     except KeyError:
         data_path = './data/'
-    Tracer(os.path.join(data_path,'tracer/torus_gw170817_traces_pruned_r250/tracers_00000050.h5part'))
+    st = time.time()
+    tracers = Tracers(os.path.join(data_path,'tracer/torus_gw170817_traces_pruned_r250'),6000,True)
+    print(time.time()-st)

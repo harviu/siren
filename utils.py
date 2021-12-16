@@ -283,6 +283,9 @@ def write_sdf_summary(model, model_input, gt, model_output, writer, total_steps,
         min_max_summary(prefix + 'model_out_min_max', model_output['model_out'], writer, total_steps)
         min_max_summary(prefix + 'coords', model_input['coords'], writer, total_steps)
 
+def write_particle_series_summary(model,model_input, gt, model_output, writer,total_steps, prefix='train_'):
+    pass
+
 def write_particle_summary(model,model_input, gt, model_output, writer,total_steps, prefix='train_', gt_img=None):
     if gt_img is not None:
         writer.add_image('gt_yz_img', gt_img['yz'][0], global_step=0)
