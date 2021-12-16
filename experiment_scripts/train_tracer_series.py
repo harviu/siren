@@ -46,7 +46,7 @@ p.add_argument('--checkpoint_path', default=None, help='Checkpoint to trained mo
 opt = p.parse_args()
 
 tracer_path = os.path.join(data_path, opt.tracer_path)
-tracer_dataset = dataio.Tracers(opt.tracer_path,opt.batch_size)
+tracer_dataset = dataio.Tracers(tracer_path,opt.batch_size)
 dataloader = DataLoader(tracer_dataset, shuffle=True, batch_size=1, pin_memory=True, num_workers=0)
 
 # Define the model.
