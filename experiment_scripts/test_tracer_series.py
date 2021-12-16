@@ -67,7 +67,7 @@ except KeyError:
 # attr = tracer[2]['Ye']
 # write_vts(coords,N,N,N,{'Ye':volume},'test.vts')
 
-dir_to_tracer = os.path.join(data_path,'tracer/torus_gw170817_traces_pruned_r250')
+dir_to_tracer = os.path.join(data_path,'tracer/tracer_data')
 tracer_norm = Tracers(dir_to_tracer,opt.batch_size,keep_aspect_ratio=True)
 psnr_list = []
 n = 0

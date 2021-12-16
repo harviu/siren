@@ -104,10 +104,6 @@ def load_tracers_npy(tracer_dir, keep_aspect_ratio = True):
         n += tracer_num[i]
     return tracer_num, data
 
-    # for i,f in enumerate(files):
-    #     n = get_tracer_num(f)
-    #     total_tracer_num+=n
-    #     tracer_num[i] = n
 
 
 def get_mgrid(sidelen, dim=2):
@@ -621,9 +617,6 @@ class Tracers(Dataset):
         self.attr = tracers[:,4:]
         self.time_mask = time_mask
         self.batch_size = batch_size
-        # print(self.coords.min(0),self.coords.max(0))
-        # print(self.attr.min(0),self.attr.max(0))
-        # exit()
     def __len__(self):
         return self.coords.shape[0] // self.batch_size
 
