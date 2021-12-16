@@ -186,9 +186,9 @@ def make_video_from_tensorboard_summaries(summary_paths, trgt_path, image_extrac
 
     # Now make joint video...
     if os.path.exists(trgt_path):
-        val = input("The video %s exists. Overwrite? (y/n)" % trgt_path)
-        if val == 'y':
-            os.remove(trgt_path)
+        # val = input("The video %s exists. Overwrite? (y/n)" % trgt_path)
+        # if val == 'y':
+        os.remove(trgt_path)
 
     make_video_grid_from_filepaths(num_rows, num_cols, video_list=video_filepaths,
                                    trgt_name=trgt_path, margin_width=0)
