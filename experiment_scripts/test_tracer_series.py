@@ -1,5 +1,3 @@
-'''Test script for experiments in paper Sec. 4.2, Supplement Sec. 3, reconstruction from laplacian.
-'''
 
 # Enable import from parent package
 import os
@@ -29,6 +27,8 @@ p.add_argument('--model_type', type=str, default='sine',
 p.add_argument('--mode', type=str, default='mlp',
                help='Options are "mlp" or "nerf"')
 p.add_argument('--resolution', type=int, default=128)
+p.add_argument('--tracer_path', type=str, default='tracer/tracer_data',
+               help='Path to the tracer file or directory')
 
 opt = p.parse_args()
 
@@ -67,7 +67,7 @@ except KeyError:
 # attr = tracer[2]['Ye']
 # write_vts(coords,N,N,N,{'Ye':volume},'test.vts')
 
-dir_to_tracer = os.path.join(data_path,'tracer/tracer_data')
+dir_to_tracer = os.path.join(data_path,opt.tracer_path)
 tracer_norm = Tracers(dir_to_tracer,opt.batch_size,keep_aspect_ratio=True)
 psnr_list = []
 n = 0
@@ -81,4 +81,4 @@ for cn in tracer_norm.time_mask:
 
 from matplotlib import pyplot as plt    
 plt.plot(psnr_list)
-plt.show()
+plt.savefig(os.path.join(root_path,'psnr.png'))
