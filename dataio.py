@@ -66,9 +66,48 @@ def load_tracers(tracer_dir, keep_aspect_ratio = True):
     data = np.zeros((total_tracer_num,5),dtype=np.float32)
     n = 0
     for i,f in enumerate(files):
-        data[n:n+tracer_num[i]] = get_xcart_ye(f)
+        data[n:n+tracer_num[i]] = get_xcart_ye(f,keep_aspect_ratio)
         n += tracer_num[i]
     return tracer_num, data
+
+def load_tracers_npy(tracer_dir, keep_aspect_ratio = True):
+    files = sorted(list(glob.glob(os.path.join(tracer_dir,'tracer*.npy'))))
+    if not files:
+        raise ValueError("This directory is empty!")
+
+    total_tracer_num = 0
+    tracer_num = [0] * len(files)
+    for i,f in enumerate(files):
+        n = np.load(f,mmap_mode='r').shape[0]
+        total_tracer_num+=n
+        tracer_num[i] = n
+    data = np.zeros((total_tracer_num,5),dtype=np.float32)
+    n = 0
+    for i,f in enumerate(files):
+        time = float(os.path.basename(f)[6:-4])
+        d = np.load(f)
+        coords = d[:,:3]
+        coords -= np.mean(coords, axis=0, keepdims=True)
+        if keep_aspect_ratio:
+            coord_max = np.amax(coords)
+            coord_min = np.amin(coords)
+        else:
+            coord_max = np.amax(coords, axis=0, keepdims=True)
+            coord_min = np.amin(coords, axis=0, keepdims=True)
+        coords = (coords - coord_min) / (coord_max - coord_min)
+        coords -= 0.5
+        coords *= 2.
+
+        data[n:n+tracer_num[i],:3] = coords
+        data[n:n+tracer_num[i],3] = time
+        data[n:n+tracer_num[i],4] = d[:,8]
+        n += tracer_num[i]
+    return tracer_num, data
+
+    # for i,f in enumerate(files):
+    #     n = get_tracer_num(f)
+    #     total_tracer_num+=n
+    #     tracer_num[i] = n
 
 
 def get_mgrid(sidelen, dim=2):
@@ -564,9 +603,12 @@ class Tracer(Dataset):
         return {'coords': torch.from_numpy(coords).float()}, {'attr': torch.from_numpy(attr).float()}
 
 class Tracers(Dataset):
-    def __init__(self, dir_to_tracers, batch_size, keep_aspect_ratio=True):
+    def __init__(self, dir_to_tracers, batch_size, keep_aspect_ratio=True, format='npy'):
         super().__init__()
-        time_mask, tracers = load_tracers(dir_to_tracers, keep_aspect_ratio)
+        if format =='npy':
+            time_mask, tracers = load_tracers_npy(dir_to_tracers, keep_aspect_ratio)
+        else:
+            time_mask, tracers = load_tracers(dir_to_tracers, keep_aspect_ratio)
 
         tracers[:,3:]
         temp_max = np.max(tracers[:,3:],0)
@@ -579,7 +621,9 @@ class Tracers(Dataset):
         self.attr = tracers[:,4:]
         self.time_mask = time_mask
         self.batch_size = batch_size
-    
+        # print(self.coords.min(0),self.coords.max(0))
+        # print(self.attr.min(0),self.attr.max(0))
+        # exit()
     def __len__(self):
         return self.coords.shape[0] // self.batch_size
 
