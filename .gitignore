@@ -132,3 +132,6 @@ logs/
 
 *.vts
 thai_statue.xyz
+
+# data
+*.npy

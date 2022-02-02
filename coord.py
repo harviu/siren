@@ -1,8 +1,12 @@
 
-from hdf5_to_dict import load_tracer
-import os
+from hdf5_to_dict import load_tracer, get_tracer_fnams
+from dataio import get_tracer_num
+import os,sys
 import numpy as np
 import math
+import h5py
+import time
+import numba
 
 def thJ_of_X(Xharm):
     poly_alpha = 14
@@ -49,22 +53,55 @@ def harm2cart(Xharm:np.array):
     Xcart = bl2cart(Xbl)
     return Xcart
 
+def get_raw_coords(f):
+    with h5py.File(f,'r') as f:
+        if 'Step#0' in f.keys():
+            Xharm = f['Step#0/Xharm'][()]
+            Xcart = f['Step#0/Xcart'][()]
+            id = f['Step#0/id'][()]
+        else:
+            Xharm = f['Xharm'][()]
+            Xcart = f['Xcart'][()]
+            id = f['id'][()]
+    return np.concatenate([Xharm,Xcart],axis=-1), id
+
+def helper_fun(tra, c):
+    idx = tra['len']
+    tra['coord'][idx] = c
+    tra['len'] += 1
+    return tra
+
+def load_trajectory(tracer_dir):
+    files = get_tracer_fnams(tracer_dir)
+    if not files:
+        raise ValueError("This directory is empty!")
+    last_id = None
+    for i,f in enumerate(files):
+        print(i)
+        coord, particle_index = get_raw_coords(f)
+        if last_id is None:
+            p_to_k = {p:k for k,p in enumerate(particle_index)}
+            tra = np.zeros((coord.shape[0], len(files),coord.shape[1]),dtype=np.float32)
+            length = np.ones((coord.shape[0]),dtype= np.int32)
+            tra[:,0,:] = coord
+        else:
+            particle_index, _, array_id2 = np.intersect1d(last_id, particle_index, assume_unique=True,return_indices=True)
+            index = [p_to_k[p] for p in particle_index]
+            tra[index,length[index]] = coord[array_id2]
+            length[index] += 1
+        last_id = particle_index
+        # n += tracer_num[i]
+    return tra, length
+
 if __name__ == '__main__':
     try:
         data_path = os.environ['data']
     except KeyError:
         data_path = './data/'
 
-    data = load_tracer(os.path.join(data_path,'tracer/torus_gw170817_traces_pruned_r250/tracers_00000050.h5part'))
+    fname = os.path.join(data_path,'tracer/torus_gw170817_traces_pruned_r250/')
+    tra, length = load_trajectory(fname)
+    np.save('trajectories',tra)
+    np.save('tra_len',length)
+    
 
-    n = data[0]['ntracers']
-    T = data[2]['T']
-    rho = data[2]['rho']
-
-    Xcart = data[2]['Xcart']
-    Xharm = data[2]['Xharm']
-    test_Xcart = Xcart[0]
-    test_Xharm = Xharm[0]
-
-    recon_Xcart = harm2cart(test_Xharm)
-    print(recon_Xcart, test_Xcart)

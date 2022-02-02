@@ -62,7 +62,7 @@ def get_dumps_full(folder,twod=False):
 
   return sorted(fulldumps)
 
-def get_tracer_fnams(tracer_dir):
+def get_tracer_fnams(tracer_dir) -> list:
   files1 = list(glob.glob(os.path.join(tracer_dir,'tracers_*.h5')))
   files2 = list(glob.glob(os.path.join(tracer_dir,'tracers_*.h5part')))
   files = sorted(files1 + files2)
