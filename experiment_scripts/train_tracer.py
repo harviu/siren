@@ -53,7 +53,7 @@ dataloader = DataLoader(tracer_dataset, shuffle=True, batch_size=1, pin_memory=T
 if opt.model_type == 'nerf':
     model = modules.SingleBVPNet(type='relu', mode='nerf', in_features=3)
 else:
-    model = modules.SingleBVPNet(type=opt.model_type, in_features=3)
+    model = modules.SingleBVPNet(type=opt.model_type, in_features=3, hidden_features=64)
 model.cuda()
 
 # Define the loss

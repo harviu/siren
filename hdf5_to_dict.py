@@ -62,7 +62,7 @@ def get_dumps_full(folder,twod=False):
 
   return sorted(fulldumps)
 
-def get_tracer_fnams(tracer_dir):
+def get_tracer_fnams(tracer_dir) -> list:
   files1 = list(glob.glob(os.path.join(tracer_dir,'tracers_*.h5')))
   files2 = list(glob.glob(os.path.join(tracer_dir,'tracers_*.h5part')))
   files = sorted(files1 + files2)
@@ -1041,11 +1041,3 @@ def load_tracer(tracer_file,ids=None):
       out_data[k] = v[mask].copy()
 
   return out_hdr,out_units,out_data
-
-if __name__ == '__main__':
-  try:
-    data_path = os.environ['data']
-  except KeyError:
-    data_path = './data/'
-  data = load_tracer(os.path.join(data_path,'tracer/torus_gw170817_traces_pruned_r250/tracers_00000950.h5part'))
-  print(data)
