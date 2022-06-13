@@ -1,0 +1,14 @@
+#!/bin/bash
+#PBS -l walltime=1:00:00
+#PBS -l nodes=1:ppn=4:gpus=1
+#PBS -l mem=8GB
+#PBS -N job
+#PBS -j oe
+#PBS -A PAS0027
+
+## Load python so I have conda
+ml python/3.6-conda5.2
+source activate vtk
+cd $HOME/siren
+export data="/fs/project/PAS0027"
+python ./experiment_scripts/test_tracer_series.py --experiment_name tracer_series --checkpoint_path ./logs/tracer_series/checkpoints/model_final.pth --tracer_path tracer/data

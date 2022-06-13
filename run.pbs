@@ -1,0 +1,14 @@
+#!/bin/bash
+#PBS -l walltime=5:00:00
+#PBS -l nodes=1:ppn=4:gpus=1
+#PBS -l mem=8GB
+#PBS -N job
+#PBS -j oe
+#PBS -A PAS0027
+
+## Load python so I have conda
+cd $HOME/siren
+ml python/3.6-conda5.2
+source activate vtk
+export data="/fs/project/PAS0027"
+python ./experiment_scripts/train_tracer_series.py --experiment_name tracer_series --model_type sine --batch_size 6000 --steps_til_summary 1000 --num_epochs 100 --tracer_path tracer/data
