@@ -136,3 +136,7 @@ thai_statue.xyz
 # data
 *.npy
 *.pth
+*.png
+
+#osc files
+job.*

@@ -19,6 +19,7 @@ from torchvision.transforms import Resize, Compose, ToTensor, Normalize
 from hdf5_to_dict import load_tracer, get_tracer_fnams
 import h5py
 from scipy.spatial import cKDTree
+import gzip
 
 from vtkmodules.util import numpy_support
 from vtkmodules import all as vtk
@@ -646,6 +647,41 @@ def scatter_3d(array,vmin=None,vmax=None,threshold = -1e10,center=None,save=Fals
     else:
         plt.show()
 
+class Isabel(Dataset):
+    def __init__(self, path_to_data):
+        super().__init__()
+        with gzip.open(path_to_data, 'rb') as f:
+            from_gzipped = np.frombuffer(f.read(), dtype='>f4') # # big-endian float32
+        data = from_gzipped.copy()
+        data = data.reshape(100,500,500)
+        data = (data +5471.85791) / (3225.42578+ 5471.85791)
+        data[data>1] = 1
+        self.vid = data[:,:,:,None]
+        self.shape = data.shape
+        self.channels = 1
+    
+    def __len__(self):
+        return 1
+
+    def __getitem__(self, idx):
+        return self.vid
+
+class Tornado(Dataset):
+    def __init__(self, path_to_data):
+        super().__init__()
+        data = np.fromfile(path_to_data, np.float32).reshape(129,129,129)
+        data = (data - data.min())/ (data.max()-data.min())
+        self.vid = data[:,:,:,None]
+        self.shape = data.shape
+        self.channels = 1
+    
+    def __len__(self):
+        return 1
+
+    def __getitem__(self, idx):
+        return self.vid
+
+
 class Video(Dataset):
     def __init__(self, path_to_video):
         super().__init__()
@@ -1205,5 +1241,7 @@ if __name__ == '__main__':
     except KeyError:
         data_path = './data/'
     st = time.time()
-    tracers = Tracers(os.path.join(data_path,'tracer/torus_gw170817_traces_pruned_r250'),6000,True)
+    # load_tracers(os.path.join(data_path,'torus_gw170817_traces_pruned_r250'),True)
+    load_tracers_npy(os.path.join(data_path,'tracer/data'),True)
     print(time.time()-st)
+    

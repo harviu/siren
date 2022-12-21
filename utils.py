@@ -372,6 +372,35 @@ def write_video_summary(vid_dataset, model, model_input, gt, model_output, write
     min_max_summary(prefix + 'pred_vid', pred_vid, writer, total_steps)
     writer.add_scalar(prefix + "psnr", psnr, total_steps)
 
+def write_volume_summary(vid_dataset, model, model_input, gt, model_output, writer, total_steps, prefix='train_'):
+    resolution = vid_dataset.shape
+    frames = [10,30, 50, 70, 90]
+    Nslice = 10
+    with torch.no_grad():
+        coords = [dataio.get_mgrid((1, resolution[1], resolution[2]), dim=3)[None,...].cuda() for f in frames]
+        for idx, f in enumerate(frames):
+            coords[idx][..., 0] = (f / (resolution[0] - 1) - 0.5) * 2
+        coords = torch.cat(coords, dim=0)
+        output = torch.zeros((len(frames), resolution[1] * resolution[2], 1))
+        split = int(coords.shape[1] / Nslice)
+        for i in range(Nslice):
+            pred = model({'coords':coords[:, i*split:(i+1)*split, :]})['model_out']
+            output[:, i*split:(i+1)*split, :] =  pred.cpu()
+    pred_vid = output.view(len(frames), resolution[1], resolution[2], 1) / 2 + 0.5
+    pred_vid = torch.clamp(pred_vid, 0, 1)
+    gt_vid = torch.from_numpy(vid_dataset.vid[frames, :, :, :])
+    psnr = 10*torch.log10(1 / torch.mean((gt_vid - pred_vid)**2))
+
+    pred_vid = pred_vid.permute(0, 3, 1, 2)
+    gt_vid = gt_vid.permute(0, 3, 1, 2)
+
+    output_vs_gt = torch.cat((gt_vid, pred_vid), dim=-2)
+    writer.add_image(prefix + 'output_vs_gt', make_grid(output_vs_gt, scale_each=False, normalize=True),
+                     global_step=total_steps)
+    min_max_summary(prefix + 'coords', model_input['coords'], writer, total_steps)
+    min_max_summary(prefix + 'pred_vid', pred_vid, writer, total_steps)
+    writer.add_scalar(prefix + "psnr", psnr, total_steps)
+
 
 def write_image_summary(image_resolution, model, model_input, gt,
                         model_output, writer, total_steps, prefix='train_'):
